@@ -1,13 +1,29 @@
 {
   "expo": {
-    "name": "video-bookmark-demo",
+    "name": "不白刷",
     "slug": "video-bookmark-demo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "videobookmarkdemo",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.playproject.videobookmarkdemo",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.playproject.videobookmarkdemo"
+        ]
+      },
+      "infoPlist": {
+        "AppGroup": "group.com.playproject.videobookmarkdemo",
+        "LSApplicationQueriesSchemes": [
+          "xhsdiscover",
+          "snssdk1128",
+          "bilibili",
+          "kwai"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +32,16 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.playproject.videobookmarkdemo"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-sqlite",
+      "./plugins/withShareExtension.js",
+      "expo-font"
+    ]
   }
 }

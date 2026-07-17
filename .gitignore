@@ -36,6 +36,8 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
+# Android generated folder (iOS is committed so Share Extension stays in git)
 /android
+
+# Local agent tooling
+.superpowers/

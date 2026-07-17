@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>视频收藏夹新版布局</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#eee9e1;color:#24201d;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+    main{max-width:1000px;margin:auto;padding:32px}.grid{display:grid;grid-template-columns:390px 1fr;gap:28px}
+    .phone{background:#f8f5ef;border:10px solid #24201d;border-radius:42px;padding:28px 16px;min-height:720px;box-shadow:0 18px 50px #0002}
+    h1{font-size:27px;margin:0 0 5px}.sub{color:#77716a;margin:0 0 18px}
+    .platforms{display:flex;gap:8px;overflow:hidden;margin-bottom:16px}.chip{white-space:nowrap;padding:8px 13px;border-radius:10px;background:#e5e0d9;font-size:16px;font-weight:650}
+    .chip.active{background:#24201d;color:white}.card{background:white;border:1px solid #e1ddd7;border-radius:14px;padding:14px;margin:11px 0;box-shadow:0 2px 5px #00000008}
+    .row{display:flex;justify-content:space-between;align-items:center}.badge{background:#ff2442;color:white;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700}.check{color:#16825d;font-weight:700}
+    .desc{font-size:14px;line-height:1.45;margin:9px 0;color:#37322e}.url{font-size:12px;color:#187968;overflow:hidden;white-space:nowrap}.actions{display:flex;gap:8px;margin-top:10px}.btn{flex:1;padding:8px;border-radius:8px;background:#f2f0ed;text-align:center;font-weight:600;font-size:13px}.danger{color:#b42318;background:#fff0f0}
+    section{background:white;border-radius:18px;padding:22px;margin-bottom:18px;border:1px solid #ddd6ce}h2{margin:0 0 10px;font-size:21px}h3{margin:0 0 6px}p,li{line-height:1.6;color:#5d554f}.choice{border:2px solid #d7d0c8;border-radius:13px;padding:16px;margin-top:12px}.choice.recommended{border-color:#16825d;background:#f1faf7}.tag{color:#16825d;font-weight:700;font-size:13px}
+    code{background:#f2efeb;padding:2px 6px;border-radius:5px}@media(max-width:780px){.grid{grid-template-columns:1fr}.phone{max-width:390px;margin:auto}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="grid">
+    <div class="phone">
+      <h1>视频收藏夹</h1>
+      <p class="sub">按平台浏览 · 自动记录观看</p>
+      <div class="platforms">
+        <div class="chip active">全部</div><div class="chip">小红书</div><div class="chip">B站</div><div class="chip">抖音</div><div class="chip">快手</div><div class="chip">X</div>
+      </div>
+      <div class="card">
+        <div class="row"><span class="badge">小红书</span><span class="check">已看 ☑️</span></div>
+        <div class="desc">Codex 损坏磁盘？这样可以解决 最近发现 C 盘空间快不够…</div>
+        <div class="url">http://xhslink.com/o/7f4MuHJKc4X</div>
+        <div class="actions"><div class="btn">打开 · 8次</div><div class="btn">取消置顶</div><div class="btn danger">删除</div></div>
+      </div>
+      <div class="card">
+        <div class="row"><span class="badge" style="background:#fb7299">B站</span><span></span></div>
+        <div class="desc">你追求“最大收益”，她计算“最小成本”。</div>
+        <div class="url">https://b23.tv/JkoDZDV</div>
+        <div class="actions"><div class="btn">打开 · 2次</div><div class="btn">置顶</div><div class="btn danger">删除</div></div>
+      </div>
+    </div>
+    <div>
+      <section>
+        <h2>拟定交互</h2>
+        <ul>
+          <li>分类栏独占一排，字体加大；点击即切换平台。</li>
+          <li>卡片不再提供“标已看”，第一次点击“打开”后自动显示 <b>已看 ☑️</b>。</li>
+          <li>每次打开写入观看历史：时间、链接记录、累计点击次数。</li>
+          <li>排序优先级：手动置顶 → 活跃度分数 → 收藏时间。</li>
+        </ul>
+      </section>
+      <section>
+        <h2>置顶规则需要你确认</h2>
+        <div class="choice recommended">
+          <span class="tag">推荐</span>
+          <h3>手动置顶永久，自动热度会衰减</h3>
+          <p>“置顶”按钮固定该条，直到你取消；非手动置顶的记录按近期点击次数自动上浮，长期不点后自然降下去。</p>
+        </div>
+        <div class="choice">
+          <h3>手动与自动统一衰减</h3>
+          <p>即使手动置顶，长时间不访问也会取消。更自动，但“置顶”按钮的含义不稳定。</p>
+        </div>
+      </section>
+      <section>
+        <h2>小红书文案结论</h2>
+        <p>直接分享时，小红书只向 Share Extension 提供 URL；现有代码已读取标题、正文和所有文本类型，输入端仍没有文字。复制链接时，小红书主动生成了一段“文案 + URL”到剪贴板，所以粘贴路径能显示文案。</p>
+        <p>要让“直接分享”也自动显示文案，需要主 App 收到 URL 后联网展开短链并解析页面标题；这属于元数据补全，不应在 Extension 内执行。</p>
+      </section>
+    </div>
+  </div>
+</main>
+</body>
+</html>
