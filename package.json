@@ -1,6 +1,6 @@
 {
   "name": "video-bookmark-demo",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/liu-jian-mao-cao": "^0.4.1",
@@ -10,6 +10,7 @@
     "expo-font": "~57.0.1",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.3",
+    "expo-secure-store": "~15.0.7",
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",

@@ -181,6 +181,69 @@ export async function updateVideoComment(
   );
 }
 
+export async function updateVideoCoverUrl(
+  db: SQLiteDatabase,
+  id: string,
+  coverUrl: string | null,
+): Promise<void> {
+  const trimmed = coverUrl?.trim() || null;
+  await db.runAsync(
+    `UPDATE videos
+     SET cover_url = ?,
+         updated_at = ?
+     WHERE id = ? AND deleted_at IS NULL`,
+    [trimmed, Date.now(), id],
+  );
+}
+
+export async function updateVideoMediaCache(
+  db: SQLiteDatabase,
+  id: string,
+  fields: {
+    coverUrl?: string | null;
+    mediaUrl?: string | null;
+  },
+): Promise<void> {
+  const now = Date.now();
+  if (fields.coverUrl !== undefined) {
+    await db.runAsync(
+      `UPDATE videos
+       SET cover_url = ?,
+           updated_at = ?
+       WHERE id = ? AND deleted_at IS NULL`,
+      [fields.coverUrl?.trim() || null, now, id],
+    );
+  }
+  if (fields.mediaUrl !== undefined) {
+    await db.runAsync(
+      `UPDATE videos
+       SET media_url = ?,
+           updated_at = ?
+       WHERE id = ? AND deleted_at IS NULL`,
+      [fields.mediaUrl?.trim() || null, now, id],
+    );
+  }
+}
+
+export async function updateVideoAiSummary(
+  db: SQLiteDatabase,
+  id: string,
+  summary: string,
+  basis?: string | null,
+): Promise<void> {
+  const trimmed = summary.trim();
+  const now = Date.now();
+  await db.runAsync(
+    `UPDATE videos
+     SET ai_summary = ?,
+         ai_summarized_at = ?,
+         ai_summary_basis = ?,
+         updated_at = ?
+     WHERE id = ? AND deleted_at IS NULL`,
+    [trimmed || null, trimmed ? now : null, basis ?? null, now, id],
+  );
+}
+
 export async function findLiveDuplicate(
   db: SQLiteDatabase,
   platform: Platform,

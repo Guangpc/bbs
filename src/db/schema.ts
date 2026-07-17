@@ -19,6 +19,15 @@ export interface VideoRow {
   meta_enriched_at: number | null;
   /** XHS note type from page state: video | normal | multi | … */
   note_type: string | null;
+  /** Cached AI summary from GLM (one-click summarize). */
+  ai_summary: string | null;
+  ai_summarized_at: number | null;
+  /** Best-effort public cover/thumbnail URL for multimodal summarize. */
+  cover_url: string | null;
+  /** Best-effort public video direct URL when resolvable. */
+  media_url: string | null;
+  /** Last summarize media basis: video | cover | text */
+  ai_summary_basis: string | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -91,6 +100,11 @@ export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
   await ensureColumn(db, "videos", "meta_enriched_at", "INTEGER");
   await ensureColumn(db, "videos", "xhs_parser_v", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(db, "videos", "note_type", "TEXT");
+  await ensureColumn(db, "videos", "ai_summary", "TEXT");
+  await ensureColumn(db, "videos", "ai_summarized_at", "INTEGER");
+  await ensureColumn(db, "videos", "cover_url", "TEXT");
+  await ensureColumn(db, "videos", "media_url", "TEXT");
+  await ensureColumn(db, "videos", "ai_summary_basis", "TEXT");
 
   // Parser v5: require metadata tied to current note; video no-title uses body.
   await db.runAsync(

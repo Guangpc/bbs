@@ -7,6 +7,7 @@ import * as SQLite from "expo-sqlite";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   FlatList,
   KeyboardAvoidingView,
@@ -14,12 +15,17 @@ import {
   Platform as RNPlatform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 
+import { runVideoSummarize } from "./src/ai/runVideoSummarize";
+import { getLlmApiKey, setLlmApiKey } from "./src/ai/llmApiKeyStore";
+import { hasSavedAiSummary, summaryButtonLabel } from "./src/ai/summarizeVideo";
+import { summaryBasisLabel, type SummaryMediaBasis } from "./src/ai/resolveMedia";
 import { consumeManualShare } from "./src/consume/consumeInboxItem";
 import {
   recordVideoOpen,
@@ -29,10 +35,7 @@ import {
 } from "./src/db/repository";
 import { listLiveVideos, migrateDatabase, type VideoRow } from "./src/db/schema";
 import { syncInbox } from "./src/inbox/syncInbox";
-import {
-  enrichVideosMetadata,
-  needsMetadataEnrichment,
-} from "./src/metadata/enrichVideos";
+import { enrichVideosMetadata } from "./src/metadata/enrichVideos";
 import { openOriginalContent } from "./src/open/openOriginal";
 import type { Platform } from "./src/parsers/share";
 import { BrandTitle } from "./src/ui/BrandTitle";
@@ -79,6 +82,12 @@ export default function App() {
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>(null);
   const [commentingVideo, setCommentingVideo] = useState<VideoRow | null>(null);
   const [draftComment, setDraftComment] = useState("");
+  const [summaryVideo, setSummaryVideo] = useState<VideoRow | null>(null);
+  const [summaryText, setSummaryText] = useState("");
+  const [summaryBasis, setSummaryBasis] = useState<SummaryMediaBasis | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState("");
 
   const refresh = useCallback(async (database: SQLite.SQLiteDatabase) => {
     const rows = await listLiveVideos(database);
@@ -227,20 +236,88 @@ export default function App() {
     if (commentingVideo?.id === video.id) {
       closeCommentEditor();
     }
+    if (summaryVideo?.id === video.id) {
+      closeSummaryPanel();
+    }
     await softDeleteVideo(db, video.id);
     await refresh(db);
     setStatus("已从收藏夹删除");
   };
 
-  const onRefetchMeta = async (video: VideoRow) => {
+  const closeSummaryPanel = () => {
+    setSummaryVideo(null);
+    setSummaryText("");
+    setSummaryBasis(null);
+    setSummaryLoading(false);
+  };
+
+  const openSummaryViewer = (video: VideoRow) => {
+    setSummaryVideo(video);
+    setSummaryText(video.ai_summary?.trim() ?? "");
+    const basis = video.ai_summary_basis;
+    setSummaryBasis(
+      basis === "video" || basis === "cover" || basis === "text" ? basis : null,
+    );
+    setSummaryLoading(false);
+    setStatus("查看 AI 总结");
+  };
+
+  const requestSummarize = async (video: VideoRow) => {
     if (!db) return;
-    setBusy(true);
-    try {
-      setStatus("正在获取文案…");
-      await runEnrich(db, [video.id]);
-    } finally {
-      setBusy(false);
+
+    const apiKey = await getLlmApiKey("zhipu");
+    if (!apiKey) {
+      await openSettings();
+      setStatus("请先配置智谱 API Key");
+      Alert.alert("需要 API Key", "请粘贴智谱开放平台的 API Key 后再总结。");
+      return;
     }
+
+    setSummaryVideo(video);
+    setSummaryLoading(true);
+    setSummaryText(video.ai_summary?.trim() ?? "");
+    setSummaryBasis(
+      video.ai_summary_basis === "video" ||
+        video.ai_summary_basis === "cover" ||
+        video.ai_summary_basis === "text"
+        ? video.ai_summary_basis
+        : null,
+    );
+    setStatus("正在总结…");
+    try {
+      const result = await runVideoSummarize(db, video);
+      await refresh(db);
+      setSummaryVideo(result.video);
+      setSummaryText(result.summary);
+      setSummaryBasis(result.basis);
+      setStatus(`总结完成 · ${result.basisLabel}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(message);
+      Alert.alert("总结失败", message);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const onSummaryButton = (video: VideoRow) => {
+    if (hasSavedAiSummary(video)) {
+      openSummaryViewer(video);
+      return;
+    }
+    void requestSummarize(video);
+  };
+
+  const openSettings = async () => {
+    const existing = await getLlmApiKey("zhipu");
+    setApiKeyDraft(existing ?? "");
+    setSettingsOpen(true);
+  };
+
+  const onSaveApiKey = async () => {
+    await setLlmApiKey("zhipu", apiKeyDraft);
+    setSettingsOpen(false);
+    setStatus(apiKeyDraft.trim() ? "智谱 API Key 已加密保存" : "智谱 API Key 已清除");
   };
 
   const visible = useMemo(() => {
@@ -257,6 +334,13 @@ export default function App() {
   const commentingPlatformColor = commentingVideo
     ? (PLATFORM_COLOR[commentingVideo.platform] ?? PLATFORM_COLOR.unknown)
     : PLATFORM_COLOR.unknown;
+  const summarizingTitle = summaryVideo ? displayTitle(summaryVideo) : null;
+  const summarizingPlatformLabel = summaryVideo
+    ? (PLATFORM_LABEL[summaryVideo.platform] ?? summaryVideo.platform)
+    : "";
+  const summarizingPlatformColor = summaryVideo
+    ? (PLATFORM_COLOR[summaryVideo.platform] ?? PLATFORM_COLOR.unknown)
+    : PLATFORM_COLOR.unknown;
 
   return (
     <View style={styles.gradient}>
@@ -267,7 +351,16 @@ export default function App() {
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
         <View style={styles.header}>
-          {fontsLoaded ? <BrandTitle /> : <Text style={styles.titleFallback}>不白刷</Text>}
+          <View style={styles.headerTop}>
+            {fontsLoaded ? <BrandTitle /> : <Text style={styles.titleFallback}>不白刷</Text>}
+            <Pressable
+              style={styles.settingsHit}
+              onPress={() => void openSettings()}
+              disabled={busy || !!commentingVideo || !!summaryVideo}
+            >
+              <Text style={styles.settingsText}>设置</Text>
+            </Pressable>
+          </View>
           <Text style={styles.subtitle}>刷都刷了，那就让好内容不白刷。</Text>
           <Text style={styles.status}>{status}</Text>
         </View>
@@ -276,7 +369,7 @@ export default function App() {
           <TextInput
             style={styles.input}
             multiline
-            editable={!commentingVideo}
+            editable={!commentingVideo && !summaryVideo}
             placeholder="粘贴链接或分享文案（视频 / 笔记均可；分享入口不可用时的 fallback）"
             value={pasteText}
             onChangeText={setPasteText}
@@ -286,14 +379,14 @@ export default function App() {
             <Pressable
               style={styles.button}
               onPress={onPasteSave}
-              disabled={busy || !!commentingVideo}
+              disabled={busy || !!commentingVideo || !!summaryVideo}
             >
               <Text style={styles.buttonText}>粘贴保存</Text>
             </Pressable>
             <Pressable
               style={[styles.button, styles.secondary]}
               onPress={() => db && runSync(db)}
-              disabled={busy || !db || !!commentingVideo}
+              disabled={busy || !db || !!commentingVideo || !!summaryVideo}
             >
               <Text style={styles.buttonText}>同步 Inbox</Text>
             </Pressable>
@@ -338,11 +431,8 @@ export default function App() {
             const watched = item.status === "watched";
             const pinned = item.is_pinned === 1;
             const title = displayTitle(item);
-            const canRefetch =
-              item.platform === "xiaohongshu" ||
-              item.platform === "x" ||
-              needsMetadataEnrichment(item);
             const preview = formatCommentPreview(item.comment);
+            const summarizeLabel = summaryButtonLabel(item);
 
             return (
               <View
@@ -403,11 +493,9 @@ export default function App() {
                   <Pressable style={styles.actionBtn} onPress={() => openCommentEditor(item)}>
                     <Text style={styles.actionText}>评论</Text>
                   </Pressable>
-                  {canRefetch ? (
-                    <Pressable style={styles.actionBtn} onPress={() => onRefetchMeta(item)}>
-                      <Text style={styles.actionText}>重新获取</Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable style={styles.actionBtn} onPress={() => onSummaryButton(item)}>
+                    <Text style={styles.actionText}>{summarizeLabel}</Text>
+                  </Pressable>
                   <Pressable style={styles.actionBtn} onPress={() => onTogglePin(item)}>
                     <Text style={styles.actionText}>{pinned ? "取消置顶" : "置顶"}</Text>
                   </Pressable>
@@ -476,6 +564,113 @@ export default function App() {
             </View>
           </KeyboardAvoidingView>
         </Modal>
+
+        <Modal
+          visible={!!summaryVideo}
+          transparent
+          animationType="fade"
+          onRequestClose={closeSummaryPanel}
+        >
+          <View style={styles.modalRoot}>
+            <Pressable style={styles.modalBackdrop} onPress={closeSummaryPanel} />
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={[styles.badge, { backgroundColor: summarizingPlatformColor }]}>
+                  <Text allowFontScaling={false} style={styles.badgeText}>
+                    {summarizingPlatformLabel}
+                  </Text>
+                </View>
+                <Text style={styles.modalTitle} numberOfLines={2}>
+                  {summarizingTitle ?? "无标题（仅链接）"}
+                </Text>
+              </View>
+
+              <Text style={styles.commentPanelLabel}>AI 总结</Text>
+              {summaryBasis ? (
+                <Text style={styles.summaryBasisHint}>{summaryBasisLabel(summaryBasis)}</Text>
+              ) : null}
+              {summaryLoading ? (
+                <View style={styles.summaryLoadingBox}>
+                  <ActivityIndicator color="#6366F1" />
+                  <Text style={styles.summaryLoadingText}>正在总结…</Text>
+                </View>
+              ) : (
+                <ScrollView
+                  style={styles.summaryScroll}
+                  contentContainerStyle={styles.summaryScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <Text style={styles.summaryBody}>
+                    {summaryText.trim() || "暂无总结内容"}
+                  </Text>
+                </ScrollView>
+              )}
+
+              <View style={styles.commentActions}>
+                <Pressable
+                  style={[styles.commentActionBtn, styles.commentCancelBtn]}
+                  onPress={closeSummaryPanel}
+                  disabled={summaryLoading}
+                >
+                  <Text style={styles.commentCancelText}>关闭总结</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.commentActionBtn, styles.commentSaveBtn]}
+                  onPress={() => summaryVideo && void requestSummarize(summaryVideo)}
+                  disabled={summaryLoading || !summaryVideo}
+                >
+                  <Text style={styles.commentSaveText}>重新总结</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={settingsOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSettingsOpen(false)}
+        >
+          <KeyboardAvoidingView
+            style={styles.modalRoot}
+            behavior={RNPlatform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={12}
+          >
+            <Pressable style={styles.modalBackdrop} onPress={() => setSettingsOpen(false)} />
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>智谱 API Key</Text>
+              <Text style={styles.settingsHint}>
+                一键总结默认使用 GLM-5V-Turbo。Key 经系统钥匙串加密保存在本机，不会写入分享扩展。
+              </Text>
+              <TextInput
+                style={styles.commentInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                placeholder="粘贴 open.bigmodel.cn 的 API Key"
+                placeholderTextColor="#94A3B8"
+                value={apiKeyDraft}
+                onChangeText={setApiKeyDraft}
+                textAlignVertical="top"
+              />
+              <View style={styles.commentActions}>
+                <Pressable
+                  style={[styles.commentActionBtn, styles.commentCancelBtn]}
+                  onPress={() => setSettingsOpen(false)}
+                >
+                  <Text style={styles.commentCancelText}>取消</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.commentActionBtn, styles.commentSaveBtn]}
+                  onPress={() => void onSaveApiKey()}
+                >
+                  <Text style={styles.commentSaveText}>保存</Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -502,6 +697,19 @@ const styles = StyleSheet.create({
   },
   safe: { flex: 1, backgroundColor: "transparent" },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 6 },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  settingsHit: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.72)",
+  },
+  settingsText: { fontSize: 13, fontWeight: "600", color: "#475569" },
   titleFallback: {
     fontSize: 34,
     fontWeight: "800",
@@ -669,6 +877,11 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontWeight: "600",
   },
+  summaryBasisHint: {
+    fontSize: 12,
+    color: "#5B7CFA",
+    fontWeight: "600",
+  },
   commentInput: {
     minHeight: 120,
     borderWidth: 1,
@@ -694,4 +907,33 @@ const styles = StyleSheet.create({
   commentSaveBtn: { backgroundColor: "#5B7CFA" },
   commentCancelText: { fontSize: 14, fontWeight: "600", color: "#475569" },
   commentSaveText: { fontSize: 14, fontWeight: "600", color: "#fff" },
+  summaryLoadingBox: {
+    minHeight: 160,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.35)",
+  },
+  summaryLoadingText: { fontSize: 14, color: "#64748B" },
+  summaryScroll: {
+    maxHeight: 280,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.35)",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+  },
+  summaryScrollContent: { padding: 12 },
+  summaryBody: {
+    fontSize: 15,
+    color: "#1E293B",
+    lineHeight: 22,
+  },
+  settingsHint: {
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 19,
+  },
 });

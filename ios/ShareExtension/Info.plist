@@ -20,7 +20,6 @@
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- Personal demo only: appear in as many share sheets as possible (Douyin/Bilibili/etc). -->
 			<key>NSExtensionActivationRule</key>
 			<string>TRUEPREDICATE</string>
 		</dict>
@@ -29,5 +28,7 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
 	</dict>
+	<key>RCTNewArchEnabled</key>
+	<true/>
 </dict>
 </plist>
